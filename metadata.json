@@ -1,0 +1,5 @@
+{
+  "name": "Sistem Analisis Murid (SAM)",
+  "description": "Aplikasi pengurusan data prestasi murid yang mengintegrasikan data kelas dan data prestasi (bintang, rekod, mata) dengan visualisasi dan analisis automatik.",
+  "requestFramePermissions": []
+}
