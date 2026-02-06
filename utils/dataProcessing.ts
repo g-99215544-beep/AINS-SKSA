@@ -156,15 +156,17 @@ export const mergeStudentData = (
     classMap.set(s.name, s);
   });
 
-  let merged: MergedStudent[] = performanceData.map(p => {
-    const classInfo = classMap.get(p.name);
-    return {
-      ...p,
-      className: classInfo ? classInfo.className : 'TIADA KELAS',
-      gender: classInfo?.gender,
-      idNumber: classInfo?.idNumber
-    };
-  });
+  let merged: MergedStudent[] = performanceData
+    .filter(p => classMap.has(p.name)) // Buang murid yang tiada kelas (sudah berpindah)
+    .map(p => {
+      const classInfo = classMap.get(p.name)!;
+      return {
+        ...p,
+        className: classInfo.className,
+        gender: classInfo.gender,
+        idNumber: classInfo.idNumber
+      };
+    });
 
   return merged;
 };
