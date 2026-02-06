@@ -1,6 +1,6 @@
 import { MergedStudent, StudentClassInfo, StudentPerformance } from '../types';
 import { db } from '../lib/firebase';
-import { ref, get, child } from "firebase/database";
+import { ref, get, child, set, update } from "firebase/database";
 import * as XLSX from 'xlsx';
 
 // Helper to normalize names for comparison (remove spaces, lowercase)
@@ -151,7 +151,7 @@ export const mergeStudentData = (
   classData: StudentClassInfo[]
 ): MergedStudent[] => {
   const classMap = new Map<string, StudentClassInfo>();
-  
+
   classData.forEach(s => {
     classMap.set(s.name, s);
   });
@@ -167,4 +167,69 @@ export const mergeStudentData = (
   });
 
   return merged;
+};
+
+// Firebase key sanitization: Firebase doesn't allow . # $ [ ] /
+const sanitizeFirebaseKey = (name: string): string => {
+  return name.replace(/[.#$\[\]/]/g, '_');
+};
+
+// Save performance data to Firebase (merge with existing - only update marks)
+export const savePerformanceDataToFirebase = async (
+  newData: StudentPerformance[]
+): Promise<void> => {
+  try {
+    const updates: Record<string, any> = {};
+
+    newData.forEach(student => {
+      const key = sanitizeFirebaseKey(student.name);
+      updates[`performanceData/${key}`] = {
+        name: student.name,
+        email: student.email,
+        stars: student.stars,
+        records: student.records,
+        points: student.points,
+      };
+    });
+
+    const dbRef = ref(db);
+    await update(dbRef, updates);
+    console.log("Data prestasi berjaya disimpan ke Firebase.");
+  } catch (error) {
+    console.error("Gagal menyimpan data ke Firebase:", error);
+    throw error;
+  }
+};
+
+// Load performance data from Firebase
+export const loadPerformanceDataFromFirebase = async (): Promise<StudentPerformance[]> => {
+  const dbRef = ref(db);
+  try {
+    const snapshot = await get(child(dbRef, 'performanceData'));
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      const students: StudentPerformance[] = [];
+
+      Object.values(data).forEach((entry: any) => {
+        if (entry && entry.name) {
+          students.push({
+            name: entry.name,
+            email: entry.email || '',
+            stars: entry.stars || 0,
+            records: entry.records || 0,
+            points: entry.points || 0,
+          });
+        }
+      });
+
+      console.log(`${students.length} rekod murid dimuat dari Firebase.`);
+      return students;
+    } else {
+      console.log("Tiada data prestasi dalam Firebase.");
+      return [];
+    }
+  } catch (error) {
+    console.error("Gagal memuat data dari Firebase:", error);
+    return [];
+  }
 };

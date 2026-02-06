@@ -4,7 +4,7 @@ import autoTable from 'jspdf-autotable';
 import { Sidebar } from './Sidebar';
 import { FileUpload } from './FileUpload';
 import { StudentTable } from './StudentTable';
-import { fetchClassDataFromFirebase, mergeStudentData } from '../utils/dataProcessing';
+import { fetchClassDataFromFirebase, mergeStudentData, savePerformanceDataToFirebase, loadPerformanceDataFromFirebase } from '../utils/dataProcessing';
 import { MergedStudent, SortOption, StudentClassInfo, CLASS_ORDER, StudentPerformance } from '../types';
 
 // Helper for sorting to be used in UI and PDF generation
@@ -35,21 +35,56 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Initialize Class Data on Mount from Firebase
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Initialize Class Data + Performance Data on Mount from Firebase
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const data = await fetchClassDataFromFirebase();
-        setClassData(data);
+        const [classResult, perfResult] = await Promise.all([
+          fetchClassDataFromFirebase(),
+          loadPerformanceDataFromFirebase(),
+        ]);
+        setClassData(classResult);
+        if (perfResult.length > 0) {
+          setPerformanceData(perfResult);
+        }
       } catch (err) {
-        console.error("Failed to load class data", err);
+        console.error("Failed to load data", err);
       } finally {
         setIsLoading(false);
       }
     };
     loadData();
   }, []);
+
+  // Handle new file upload: merge with existing data + save to Firebase
+  const handleNewDataUploaded = async (newData: StudentPerformance[]) => {
+    // Merge: update existing students' marks, add new students
+    setPerformanceData(prev => {
+      const existingMap = new Map<string, StudentPerformance>();
+      prev.forEach(s => existingMap.set(s.name, s));
+
+      // Update or add from new data
+      newData.forEach(s => {
+        existingMap.set(s.name, s);
+      });
+
+      const merged = Array.from(existingMap.values());
+      return merged;
+    });
+
+    // Save to Firebase
+    setIsSaving(true);
+    try {
+      await savePerformanceDataToFirebase(newData);
+    } catch (err) {
+      console.error("Gagal menyimpan ke Firebase:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const mergedData = useMemo(() => {
     if (performanceData.length === 0) return [];
@@ -137,6 +172,20 @@ export const Dashboard: React.FC = () => {
             styles: { fontSize: 8, cellPadding: 2 },
             headStyles: { fillColor: [79, 70, 229] },
             alternateRowStyles: { fillColor: [243, 244, 246] },
+            willDrawCell: (data) => {
+              if (data.section === 'body' && sortOption === SortOption.POINTS_DESC) {
+                if (data.row.index === 0) {
+                  data.cell.styles.fillColor = [187, 247, 208]; // green-200
+                  data.cell.styles.fontStyle = 'bold';
+                } else if (data.row.index === 1) {
+                  data.cell.styles.fillColor = [220, 252, 231]; // green-100
+                  data.cell.styles.fontStyle = 'bold';
+                } else if (data.row.index === 2) {
+                  data.cell.styles.fillColor = [240, 253, 244]; // green-50
+                  data.cell.styles.fontStyle = 'bold';
+                }
+              }
+            },
         });
 
         doc.save(`${title.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
@@ -192,6 +241,20 @@ export const Dashboard: React.FC = () => {
                     styles: { fontSize: 8, cellPadding: 2 },
                     headStyles: { fillColor: [79, 70, 229] },
                     alternateRowStyles: { fillColor: [243, 244, 246] },
+                    willDrawCell: (data) => {
+                      if (data.section === 'body' && sortOption === SortOption.POINTS_DESC) {
+                        if (data.row.index === 0) {
+                          data.cell.styles.fillColor = [187, 247, 208];
+                          data.cell.styles.fontStyle = 'bold';
+                        } else if (data.row.index === 1) {
+                          data.cell.styles.fillColor = [220, 252, 231];
+                          data.cell.styles.fontStyle = 'bold';
+                        } else if (data.row.index === 2) {
+                          data.cell.styles.fillColor = [240, 253, 244];
+                          data.cell.styles.fontStyle = 'bold';
+                        }
+                      }
+                    },
                     didDrawPage: (data) => {
                     }
                 });
@@ -237,6 +300,7 @@ export const Dashboard: React.FC = () => {
                 </h2>
                 <p className="text-gray-500 mt-1">Data Prestasi dan Kedudukan Murid</p>
                 {isLoading && <span className="text-xs text-indigo-600 animate-pulse">Sedang memuat turun data murid...</span>}
+                {isSaving && <span className="text-xs text-green-600 animate-pulse">Sedang menyimpan data ke Firebase...</span>}
              </div>
           </div>
 
@@ -281,7 +345,7 @@ export const Dashboard: React.FC = () => {
 
         {/* Main Content Area */}
         <div className="space-y-6">
-           <FileUpload onDataLoaded={setPerformanceData} />
+           <FileUpload onDataLoaded={handleNewDataUploaded} />
            
            <div className="flex justify-between items-center bg-white p-4 rounded-t-lg border-b border-gray-200">
              <h3 className="font-semibold text-gray-700">Senarai Murid</h3>
