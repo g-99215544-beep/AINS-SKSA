@@ -1,6 +1,6 @@
 import { MergedStudent, StudentClassInfo, StudentPerformance } from '../types';
-import { db } from '../lib/firebase';
-import { ref, get, child, set, update } from "firebase/database";
+import { dbKehadiran, dbAinsData } from '../lib/firebase';
+import { ref, get, child, update } from "firebase/database";
 import * as XLSX from 'xlsx';
 
 // Helper to normalize names for comparison (remove spaces, lowercase)
@@ -111,7 +111,7 @@ const mapClassCodeToName = (code: string): string => {
 };
 
 export const fetchClassDataFromFirebase = async (): Promise<StudentClassInfo[]> => {
-  const dbRef = ref(db);
+  const dbRef = ref(dbKehadiran);
   try {
     const snapshot = await get(child(dbRef, 'config/classes/classData'));
     if (snapshot.exists()) {
@@ -192,7 +192,7 @@ export const savePerformanceDataToFirebase = async (
       };
     });
 
-    const dbRef = ref(db);
+    const dbRef = ref(dbAinsData);
     await update(dbRef, updates);
     console.log("Data prestasi berjaya disimpan ke Firebase.");
   } catch (error) {
@@ -203,7 +203,7 @@ export const savePerformanceDataToFirebase = async (
 
 // Load performance data from Firebase
 export const loadPerformanceDataFromFirebase = async (): Promise<StudentPerformance[]> => {
-  const dbRef = ref(db);
+  const dbRef = ref(dbAinsData);
   try {
     const snapshot = await get(child(dbRef, 'performanceData'));
     if (snapshot.exists()) {
